@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace AdaCompiler
+namespace AdaCompilador
 {
     public class Token
     {
