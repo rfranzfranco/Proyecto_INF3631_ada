@@ -1,0 +1,134 @@
+with Ada.Text_IO;
+with Ada.Integer_Text_IO;
+with Ada.Float_Text_IO;
+use Ada.Text_IO;
+use Ada.Integer_Text_IO;
+use Ada.Float_Text_IO;
+
+procedure Gestion_Notas is
+   -- Tipo arreglo para las notas del estudiante
+   type Registro_Notas is array (1 .. 5) of Float;
+
+   Notas     : Registro_Notas;
+   Nombre    : String (1 .. 40);
+   Longitud  : Natural;
+   Promedio  : Float;
+   Aprobadas : Integer := 0;
+   Nota_Max  : Float := 0.0;
+   Nota_Min  : Float := 100.0;
+   Reingreso : Boolean := False;
+   Valido    : Boolean := False;
+
+   Min_Aprob : constant Float := 51.0;
+   Num_Notas : constant Integer := 5;
+
+   -- Procedimiento con parametros IN, OUT e IN OUT
+   procedure Calcular_Estadisticas
+     (N     : in Registro_Notas;
+      Prom  : out Float;
+      Aprob : in out Integer;
+      Max   : out Float;
+      Min   : out Float)
+   is
+      Suma : Float := 0.0;
+   begin
+      Aprob := 0;
+      Max := N (1);
+      Min := N (1);
+      for I in 1 .. Num_Notas loop
+         Suma := Suma + N (I);
+         if N (I) > Max then
+            Max := N (I);
+         end if;
+         if N (I) < Min then
+            Min := N (I);
+         end if;
+         if N (I) >= Min_Aprob then
+            Aprob := Aprob + 1;
+         end if;
+      end loop;
+      Prom := Suma / Float (Num_Notas);
+   end Calcular_Estadisticas;
+
+   -- Funcion que retorna una categoria segun el promedio
+   function Obtener_Categoria (Prom : Float) return String is
+   begin
+      if Prom >= 90.0 then
+         return "EXCELENTE";
+      elsif Prom >= 70.0 then
+         return "BUENO    ";
+      elsif Prom >= Min_Aprob then
+         return "REGULAR  ";
+      else
+         return "REPROBADO";
+      end if;
+   end Obtener_Categoria;
+
+begin
+   Put_Line ("=== SISTEMA DE GESTION DE NOTAS ===");
+
+   -- Ciclo WHILE para validar el ingreso del nombre
+   -- Condicion compuesta: not Valido or else Reingreso
+   while not Valido or else Reingreso loop
+      Put ("Nombre del estudiante: ");
+      Get_Line (Nombre, Longitud);
+      if Longitud >= 3 then
+         Valido := True;
+         Reingreso := False;
+      else
+         Put_Line ("Nombre demasiado corto. Intente nuevamente.");
+         Reingreso := True;
+      end if;
+   end loop;
+
+   -- Ciclo FOR estandar para ingresar las notas
+   for I in 1 .. Num_Notas loop
+      Put ("Nota " & Integer'Image (I) & " (0.0 - 100.0): ");
+      Get (Notas (I));
+   end loop;
+
+   -- Llamada al procedimiento con parametros OUT e IN OUT
+   Calcular_Estadisticas (Notas, Promedio, Aprobadas, Nota_Max, Nota_Min);
+
+   -- Ciclo FOR REVERSE para mostrar notas en orden inverso
+   New_Line;
+   Put_Line ("--- Detalle en orden inverso ---");
+   for I in reverse 1 .. Num_Notas loop
+      Put ("Nota [" & Integer'Image (I) & "]: ");
+      Put (Notas (I), Fore => 4, Aft => 1, Exp => 0);
+      New_Line;
+   end loop;
+
+   -- Mensaje con operador de concatenacion &
+   New_Line;
+   Put_Line ("Estudiante  : " & Nombre (1 .. Longitud));
+   Put_Line ("Categoria   : " & Obtener_Categoria (Promedio));
+
+   Put ("Promedio    : ");
+   Put (Promedio, Fore => 4, Aft => 2, Exp => 0);
+   New_Line;
+   Put ("Nota maxima : ");
+   Put (Nota_Max, Fore => 4, Aft => 1, Exp => 0);
+   New_Line;
+   Put ("Nota minima : ");
+   Put (Nota_Min, Fore => 4, Aft => 1, Exp => 0);
+   New_Line;
+   Put ("Aprobadas   : ");
+   Put (Aprobadas);
+   New_Line;
+   Put ("Reprobadas  : ");
+   Put (Num_Notas - Aprobadas);
+   New_Line;
+
+   -- Evaluacion final con and then, or else y xor
+   New_Line;
+   if Promedio >= Min_Aprob and then Aprobadas = Num_Notas then
+      Put_Line ("ESTADO: APROBADO CON TODAS LAS NOTAS");
+   elsif Promedio >= Min_Aprob or else Aprobadas > (Num_Notas / 2) then
+      Put_Line ("ESTADO: APROBADO CONDICIONALMENTE");
+   elsif (Promedio < Min_Aprob) xor (Aprobadas > 0) then
+      Put_Line ("ESTADO: EN RECUPERACION");
+   else
+      Put_Line ("ESTADO: REPROBADO");
+   end if;
+end Gestion_Notas;

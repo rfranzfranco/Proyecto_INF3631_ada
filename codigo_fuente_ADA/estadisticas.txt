@@ -1,0 +1,95 @@
+with Ada.Text_IO;
+with Ada.Integer_Text_IO;
+with Ada.Float_Text_IO;
+use Ada.Text_IO;
+use Ada.Integer_Text_IO;
+use Ada.Float_Text_IO;
+
+procedure Estadisticas is
+   -- Declaracion del tipo arreglo para almacenar datos
+   type Coleccion is array (1 .. 20) of Integer;
+
+   Datos     : Coleccion;
+   N         : Integer;
+   Suma      : Integer := 0;
+   Maximo    : Integer;
+   Minimo    : Integer;
+   Promedio  : Float;
+   Aprobados : Integer := 0;
+   Umbral    : constant Integer := 51;
+   Etiqueta  : String (1 .. 12);
+
+   -- Funcion que calcula el promedio
+   function Calcular_Promedio (Total : Integer; Cant : Integer) return Float is
+   begin
+      return Float (Total) / Float (Cant);
+   end Calcular_Promedio;
+
+   -- Procedimiento que muestra los resultados formateados
+   procedure Mostrar_Resultados
+     (Prom : in Float; Max : in Integer; Min : in Integer) is
+   begin
+      Put_Line ("--- Resultados Estadisticos ---");
+      Put ("Promedio : ");
+      Put (Prom, Fore => 4, Aft => 2, Exp => 0);
+      New_Line;
+      Put ("Maximo   : ");
+      Put (Max);
+      New_Line;
+      Put ("Minimo   : ");
+      Put (Min);
+      New_Line;
+   end Mostrar_Resultados;
+
+begin
+   Put_Line ("=== ANALISIS ESTADISTICO ===");
+   Put ("Cantidad de datos (1-20): ");
+   Get (N);
+
+   -- Ciclo FOR para ingresar datos y acumular la suma
+   for I in 1 .. N loop
+      Put ("Dato " & Integer'Image (I) & ": ");
+      Get (Datos (I));
+      Suma := Suma + Datos (I);
+      if Datos (I) >= Umbral then
+         Aprobados := Aprobados + 1;
+      end if;
+   end loop;
+
+   -- Inicializar maximo y minimo con el primer elemento
+   Maximo := Datos (1);
+   Minimo := Datos (1);
+
+   -- Ciclo FOR para encontrar maximo y minimo con IF-ELSIF
+   for I in 2 .. N loop
+      if Datos (I) > Maximo then
+         Maximo := Datos (I);
+      elsif Datos (I) < Minimo then
+         Minimo := Datos (I);
+      end if;
+   end loop;
+
+   -- Calcular promedio mediante la funcion
+   Promedio := Calcular_Promedio (Suma, N);
+   Mostrar_Resultados (Promedio, Maximo, Minimo);
+
+   -- Evaluacion con condiciones compuestas: and then, or else
+   if Promedio >= Float (Umbral) and then Aprobados >= (N / 2 + 1) then
+      Etiqueta := "DESTACADO   ";
+   elsif Promedio >= Float (Umbral) or else Aprobados > (N - Aprobados) then
+      Etiqueta := "ACEPTABLE   ";
+   elsif Promedio < Float (Umbral) and then Aprobados = 0 then
+      Etiqueta := "CRITICO     ";
+   else
+      Etiqueta := "BAJO UMBRAL ";
+   end if;
+
+   Put_Line ("Clasificacion: " & Etiqueta);
+   Put ("Aprobados sobre umbral: ");
+   Put (Aprobados);
+   New_Line;
+   Put ("Reprobados: ");
+   Put (N - Aprobados);
+   New_Line;
+   Put_Line ("Proceso completado.");
+end Estadisticas;

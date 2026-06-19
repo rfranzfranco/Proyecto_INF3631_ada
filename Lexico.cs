@@ -121,7 +121,7 @@ namespace AdaCompilador
                         break;
 
                     case 1:
-                        if (char.IsAsciiLetter(c))
+                        if (char.IsAsciiLetterOrDigit(c) || c == '_')
                         {
                             lexema += c;
                             i++;
