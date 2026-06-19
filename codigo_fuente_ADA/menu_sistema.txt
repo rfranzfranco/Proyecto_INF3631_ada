@@ -1,0 +1,111 @@
+with Ada.Text_IO;
+with Ada.Integer_Text_IO;
+use Ada.Text_IO;
+use Ada.Integer_Text_IO;
+
+procedure Menu_Sistema is
+   Opcion       : Integer;
+   Numero       : Integer;
+   Intentos     : Integer := 0;
+   Max_Intentos : constant Integer := 5;
+   Secreto      : constant Integer := 42;
+   Es_Primo     : Boolean;
+
+   -- Funcion que determina si un numero es primo
+   function Verificar_Primo (N : Integer) return Boolean is
+      Resultado : Boolean := True;
+      D         : Integer := 2;
+   begin
+      if N <= 1 then
+         Resultado := False;
+      else
+         -- Ciclo WHILE con condicion compuesta usando and then
+         while D * D <= N and then Resultado loop
+            if N mod D = 0 then
+               Resultado := False;
+            end if;
+            D := D + 1;
+         end loop;
+      end if;
+      return Resultado;
+   end Verificar_Primo;
+
+begin
+   Put_Line ("=== SISTEMA DE MENU ===");
+
+   -- Ciclo LOOP con EXIT WHEN para controlar el menu principal
+   loop
+      New_Line;
+      Put_Line ("1. Verificar numero primo");
+      Put_Line ("2. Adivinar el numero secreto");
+      Put_Line ("3. Tabla de multiplicar");
+      Put_Line ("0. Salir");
+      Put ("Seleccione opcion: ");
+      Get (Opcion);
+
+      exit when Opcion = 0;
+
+      -- Sentencia CASE-WHEN-OTHERS para despacho de opciones
+      case Opcion is
+         when 1      =>
+            Put ("Ingrese un numero entero: ");
+            Get (Numero);
+            Es_Primo := Verificar_Primo (Numero);
+            if Es_Primo then
+               Put (Numero);
+               Put_Line (" es un numero primo.");
+            else
+               Put (Numero);
+               Put_Line (" NO es primo.");
+            end if;
+
+         when 2      =>
+            Intentos := 0;
+            Put_Line ("Adivina el numero secreto entre 1 y 100.");
+
+            -- Ciclo LOOP interno con EXIT WHEN y condicion or else
+            loop
+               Put ("Intento " & Integer'Image (Intentos + 1) & ": ");
+               Get (Numero);
+               Intentos := Intentos + 1;
+
+               if Numero = Secreto then
+                  Put_Line ("Correcto! Adivinaste.");
+               elsif Numero < Secreto then
+                  Put_Line ("El numero secreto es mas alto.");
+               else
+                  Put_Line ("El numero secreto es mas bajo.");
+               end if;
+
+               -- EXIT con condicion compuesta: or else
+               exit when Intentos >= Max_Intentos or else Numero = Secreto;
+            end loop;
+
+            -- Verificacion con and then despues del ciclo
+            if Intentos >= Max_Intentos and then Numero /= Secreto then
+               Put ("Agotaste los intentos. El secreto era: ");
+               Put (Secreto);
+               New_Line;
+            end if;
+
+         when 3      =>
+            Put ("Ingrese un numero para su tabla: ");
+            Get (Numero);
+            New_Line;
+            -- Ciclo FOR en rango fijo 1..12
+            for I in 1 .. 12 loop
+               Put (Numero);
+               Put (" x ");
+               Put (I);
+               Put (" = ");
+               Put (Numero * I);
+               New_Line;
+            end loop;
+
+         when others =>
+            Put_Line ("Opcion no valida. Intente de nuevo.");
+      end case;
+   end loop;
+
+   Put_Line ("Programa finalizado.");
+end Menu_Sistema;

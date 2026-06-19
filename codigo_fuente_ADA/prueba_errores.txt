@@ -1,0 +1,16 @@
+with Ada.Text_IO;
+use Ada.Text_IO;
+
+procedure Prueba_Errores is
+   Valor : Integer := 100;
+   Factor : Float := 2.5;
+   -- Errores léxicos intencionados a continuación:
+   SimboloExtraño : Character := '@';  -- @ es un carácter extraño
+   SimboloOtro : Character := '$';     -- $ es un carácter extraño
+   DecimalMal1 : Float := 12.a;        // 12.a es un decimal mal formado
+   DecimalMal2 : Float := 15. ;        // 15. es un decimal mal formado (falta decimales)
+   CadenaAbierta : String := "Hola;    -- Cadena sin cerrar
+begin
+   Put_Line("Iniciando prueba con errores...");
+   Valor := Valor + 50;
+end Prueba_Errores;

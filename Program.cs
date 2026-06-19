@@ -8,7 +8,7 @@ namespace AdaCompilador
     {
         static void Main(string[] args)
         {
-            string rutaDefecto = @"d:\SEM 1-2026\INF 3631A - Diseno de compiladores\proyecto\codigo ada\estadisticas.txt";            
+            string rutaDefecto = @"D:\SEM 1-2026\INF 3631A - Diseno de compiladores\proyecto_SW\Proyecto_INF3631_ada\codigo_fuente_ADA\estadisticas.txt";            
             string rutaArchivo = args.Length > 0 ? args[0] : rutaDefecto;
             Console.WriteLine("=======================================================================");
             Console.WriteLine("                ANALIZADOR LÉXICO - COMPILADOR ADA");
@@ -59,7 +59,7 @@ namespace AdaCompilador
                 if (analizador.Errores.Count == 0)
                 {
                     Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine("¡No se encontraron errores léxicos! El código fuente es léxicamente correcto.");
+                    Console.WriteLine("No se encontraron errores léxicos.");
                     Console.ResetColor();
                 }
                 else
@@ -75,6 +75,37 @@ namespace AdaCompilador
                 }
                 Console.WriteLine("-----------------------------------------------------------------------");
                 Console.WriteLine($"Total de errores léxicos detectados: {analizador.Errores.Count}");
+                Console.WriteLine("=======================================================================");
+
+                Console.WriteLine("\n=======================================================================");
+                Console.WriteLine("                ANALIZADOR SINTÁCTICO - COMPILADOR ADA");
+                Console.WriteLine("=======================================================================");
+                
+                AnalizadorSintactico analizadorSintactico = new AnalizadorSintactico(analizador.Tokens);
+                bool esSintacticoValido = analizadorSintactico.Analizar();
+
+                Console.WriteLine("\n-----------------------------------------------------------------------");
+                Console.WriteLine("                      REPORTE DE ERRORES SINTÁCTICOS");
+                Console.WriteLine("-----------------------------------------------------------------------");
+                if (esSintacticoValido)
+                {
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine("VÁLIDO: No se encontraron errores sintácticos.");
+                    Console.ResetColor();
+                }
+                else
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"{"Línea",-6} | {"Descripción",-60}");
+                    Console.WriteLine("-----------------------------------------------------------------------");
+                    foreach (ErrorSintactico err in analizadorSintactico.Errores)
+                    {
+                        Console.WriteLine($"{err.Linea,-6} | {err.Descripcion}");
+                    }
+                    Console.ResetColor();
+                }
+                Console.WriteLine("-----------------------------------------------------------------------");
+                Console.WriteLine($"Total de errores sintácticos detectados: {analizadorSintactico.Errores.Count}");
                 Console.WriteLine("=======================================================================");
             }
             catch (Exception ex)

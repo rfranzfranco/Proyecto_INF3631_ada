@@ -30,6 +30,9 @@ namespace AdaCompilador
         public const int IO = 12;
         public const int With = 13;
         public const int Use = 15;
+        public const int Text_IO = 18;
+        public const int Integer_Text_IO = 14;
+        public const int Float_Text_IO = 16;
         public const int Procedure = 100;
         public const int Function = 101;
         public const int Is = 102;
@@ -66,6 +69,9 @@ namespace AdaCompilador
         public const int LineKw = 662;
         public const int Get = 663;
         public const int Reverse = 664;
+        public const int Put_Line = 665;
+        public const int New_Line = 666;
+        public const int Get_Line = 667;
         public const int Loop = 680;
         public const int WhileKw = 690;
         public const int Exit = 777;
@@ -112,6 +118,9 @@ namespace AdaCompilador
             { "Ada", Ada },
             { "Text", Text },
             { "IO", IO },
+            { "Text_IO", Text_IO },
+            { "Integer_Text_IO", Integer_Text_IO },
+            { "Float_Text_IO", Float_Text_IO },
             { "with", With },
             { "use", Use },
             { "procedure", Procedure },
@@ -146,9 +155,12 @@ namespace AdaCompilador
             { "in", In },
             { "out", Out },
             { "Put", Put },
+            { "Put_Line", Put_Line },
             { "New", New },
+            { "New_Line", New_Line },
             { "Line", LineKw },
             { "Get", Get },
+            { "Get_Line", Get_Line },
             { "reverse", Reverse },
             { "loop", Loop },
             { "while", WhileKw },
