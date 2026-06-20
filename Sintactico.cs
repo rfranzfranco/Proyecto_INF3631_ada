@@ -71,8 +71,6 @@ namespace AdaCompilador
             return _listaErrores.Count == 0;
         }
 
-        #region Métodos de Utilidad y Recuperación
-
         private Token ObtenerTokenActual()
         {
             if (_posicionActual >= _listaTokens.Count)
@@ -145,10 +143,6 @@ namespace AdaCompilador
             }
             _listaErrores.Add(new ErrorSintactico(linea, descripcion));
         }
-
-        #endregion
-
-        #region Reglas de Producción de la Gramática (EBNF)
 
         // programa = librerias, cuerpoPrinc
         private void Programa()
@@ -1148,8 +1142,6 @@ namespace AdaCompilador
             Emparejar(CodigosToken.Others, "Se esperaba 'others'.");
             Emparejar(CodigosToken.Flecha, "Se esperaba '=>'.");
             Acciones();
-        }
-
-        #endregion
+        }        
     }
 }
