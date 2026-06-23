@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace AdaCompilador
 {
@@ -25,8 +26,16 @@ namespace AdaCompilador
         private readonly List<Token> _listaTokens;
         private int _posicionActual;
         private readonly List<ErrorSintactico> _listaErrores;
+        
+        // Campos de análisis semántico y código intermedio
+        private TablaSimbolos? _ambitoActual;
+        private readonly List<ErrorSemantico> _listaErroresSemanticos = new List<ErrorSemantico>();
+        private readonly GeneradorCodigoIntermedio _generadorCodigoIntermedio = new GeneradorCodigoIntermedio();
+        private List<Token>? _tokensExpActual = null;
 
         public List<ErrorSintactico> Errores => _listaErrores;
+        public List<ErrorSemantico> ErroresSemanticos => _listaErroresSemanticos;
+        public GeneradorCodigoIntermedio Generador => _generadorCodigoIntermedio;
 
         public AnalizadorSintactico(List<Token> tokens)
         {
@@ -45,7 +54,13 @@ namespace AdaCompilador
         public bool Analizar()
         {
             _listaErrores.Clear();
+            _listaErroresSemanticos.Clear();
+            _generadorCodigoIntermedio.Clear();
             _posicionActual = 0;
+            _tokensExpActual = null;
+            
+            // Inicializar el ámbito global
+            _ambitoActual = new TablaSimbolos(null);
 
             if (_listaTokens.Count == 0)
             {
@@ -68,7 +83,7 @@ namespace AdaCompilador
                 RegistrarError(tokenInesperado.Linea, $"Símbolo inesperado '{tokenInesperado.Lexema}' después del final del programa.");
             }
 
-            return _listaErrores.Count == 0;
+            return _listaErrores.Count == 0 && _listaErroresSemanticos.Count == 0;
         }
 
         private Token ObtenerTokenActual()
@@ -87,7 +102,13 @@ namespace AdaCompilador
             {
                 Token tokenActual = _listaTokens[_posicionActual];
                 
-                // Uso de mayúsculas y minúsculas coincida con la palabra reservada
+                // Registrar el token si estamos recolectando para una expresión
+                if (_tokensExpActual != null)
+                {
+                    _tokensExpActual.Add(tokenActual);
+                }
+
+                // Asegurar que el uso de mayúsculas y minúsculas coincida con la palabra reservada
                 if (EsCodigoPalabraReservada(tokenActual.Codigo))
                 {
                     if (EsPalabraReservadaCasingIncorrecto(tokenActual.Lexema))
@@ -102,7 +123,6 @@ namespace AdaCompilador
 
         private bool EsCodigoPalabraReservada(int codigo)
         {
-            // Códigos correspondientes a palabras reservadas de 10 a 777, y 900 a 940
             return (codigo >= 10 && codigo <= 777) || (codigo >= 900 && codigo <= 940);
         }
 
@@ -142,6 +162,137 @@ namespace AdaCompilador
                 return;
             }
             _listaErrores.Add(new ErrorSintactico(linea, descripcion));
+        }
+
+        private void RegistrarErrorSemantico(int linea, string descripcion)
+        {
+            if (_listaErroresSemanticos.Count > 0 &&
+                _listaErroresSemanticos[_listaErroresSemanticos.Count - 1].Linea == linea &&
+                _listaErroresSemanticos[_listaErroresSemanticos.Count - 1].Descripcion == descripcion)
+            {
+                return;
+            }
+            _listaErroresSemanticos.Add(new ErrorSemantico(linea, descripcion));
+        }
+
+        // Auxiliares para comprobación de tipos y generación de cuartetos
+        private string ObtenerTipoExp(NodoExp? node)
+        {
+            if (node == null) return "Unknown";
+            if (!node.EsOperador)
+            {
+                if (double.TryParse(node.Valor, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double _))
+                {
+                    return node.Valor.Contains(".") ? "Float" : "Integer";
+                }
+                if (node.Valor.Equals("true", StringComparison.OrdinalIgnoreCase) || node.Valor.Equals("false", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "Boolean";
+                }
+                if (node.Valor.StartsWith("\"") && node.Valor.EndsWith("\""))
+                {
+                    return "String";
+                }
+                
+                string nombreBase = node.Valor;
+                int idxParentesis = nombreBase.IndexOf('(');
+                bool esAccesoElemento = (idxParentesis > 0);
+                if (esAccesoElemento)
+                {
+                    nombreBase = nombreBase.Substring(0, idxParentesis);
+                }
+
+                if (_ambitoActual == null) return "Unknown";
+                Simbolo? simb = _ambitoActual.Buscar(nombreBase);
+                if (simb != null)
+                {
+                    if (esAccesoElemento)
+                    {
+                        // Buscar la definición del tipo de arreglo
+                        Simbolo? typeSimb = _ambitoActual.Buscar(simb.Tipo);
+                        if (typeSimb != null && typeSimb.Tipo == "ArrayType" && !string.IsNullOrEmpty(typeSimb.TipoElemento))
+                        {
+                            return typeSimb.TipoElemento;
+                        }
+                        // De lo contrario, es una llamada a función (o conversión) -> devolver su tipo directamente
+                        return simb.Tipo;
+                    }
+                    return simb.Tipo;
+                }
+                return "Unknown";
+            }
+
+            if (node.Der == null)
+            {
+                if (node.Valor.Equals("not", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "Boolean";
+                }
+                if (node.Valor.Equals("unary_minus", StringComparison.OrdinalIgnoreCase) || node.Valor.Equals("unary_plus", StringComparison.OrdinalIgnoreCase))
+                {
+                    return ObtenerTipoExp(node.Izq);
+                }
+                if (node.Valor.Equals("Integer", StringComparison.OrdinalIgnoreCase) ||
+                    node.Valor.Equals("Float", StringComparison.OrdinalIgnoreCase) ||
+                    node.Valor.Equals("Boolean", StringComparison.OrdinalIgnoreCase))
+                {
+                    return node.Valor;
+                }
+                return "Unknown";
+            }
+
+            string tIzq = ObtenerTipoExp(node.Izq);
+            string tDer = ObtenerTipoExp(node.Der);
+
+            if (tIzq == "Unknown" || tDer == "Unknown") return "Unknown";
+
+            if (node.Valor.Equals("and", StringComparison.OrdinalIgnoreCase) ||
+                node.Valor.Equals("and then", StringComparison.OrdinalIgnoreCase) ||
+                node.Valor.Equals("or", StringComparison.OrdinalIgnoreCase) ||
+                node.Valor.Equals("or else", StringComparison.OrdinalIgnoreCase) ||
+                node.Valor.Equals("xor", StringComparison.OrdinalIgnoreCase))
+            {
+                if (tIzq != "Boolean" || tDer != "Boolean")
+                {
+                    RegistrarErrorSemantico(ObtenerTokenActual().Linea, "Error Semántico: Incompatibilidad de tipos.");
+                    return "Unknown";
+                }
+                return "Boolean";
+            }
+
+            if (node.Valor == "=" || node.Valor == "/=" || node.Valor == "<" || node.Valor == ">" || node.Valor == "<=" || node.Valor == ">=")
+            {
+                if (tIzq != tDer)
+                {
+                    RegistrarErrorSemantico(ObtenerTokenActual().Linea, "Error Semántico: Incompatibilidad de tipos.");
+                    return "Unknown";
+                }
+                return "Boolean";
+            }
+
+            if (tIzq != tDer)
+            {
+                RegistrarErrorSemantico(ObtenerTokenActual().Linea, "Error Semántico: Incompatibilidad de tipos.");
+                return "Unknown";
+            }
+            return tIzq;
+        }
+
+        private string? GenerarCuartetosExpre(NodoExp? node)
+        {
+            if (node == null) return null;
+            if (!node.EsOperador) return node.Valor;
+
+            string? arg1 = GenerarCuartetosExpre(node.Izq);
+            string? arg2 = GenerarCuartetosExpre(node.Der);
+
+            string temp = _generadorCodigoIntermedio.NuevaVariableTemporal();
+            string op = node.Valor;
+            if (op == "unary_minus") op = "-";
+            else if (op == "unary_plus") op = "+";
+
+            _generadorCodigoIntermedio.Emitir(op, arg1, arg2, temp);
+            return temp;
         }
 
         // programa = librerias, cuerpoPrinc
@@ -218,7 +369,13 @@ namespace AdaCompilador
         private void CuerpoPrinc()
         {
             Emparejar(CodigosToken.Procedure, "Se esperaba 'procedure'.");
-            Identificador();
+            string? procNombre = Identificador();
+            
+            if (_ambitoActual != null && procNombre != null)
+            {
+                _ambitoActual.Insertar(new Simbolo(procNombre, "Procedure", false, ObtenerTokenActual().Linea));
+            }
+
             FuncEntrada();
             Emparejar(CodigosToken.Is, "Se esperaba 'is'.");
             Funciones();
@@ -298,31 +455,66 @@ namespace AdaCompilador
         private void Procedimiento()
         {
             Emparejar(CodigosToken.Procedure, "Se esperaba 'procedure'.");
-            Identificador();
+            string? procNombre = Identificador();
+
+            if (_ambitoActual != null && procNombre != null)
+            {
+                _ambitoActual.Insertar(new Simbolo(procNombre, "Procedure", false, ObtenerTokenActual().Linea));
+            }
+
+            // Crear un nuevo ámbito para el procedimiento
+            _ambitoActual = new TablaSimbolos(_ambitoActual);
+
             FuncEntrada();
             Emparejar(CodigosToken.Is, "Se esperaba 'is'.");
             Funciones();
             Cuerpo();
             Emparejar(CodigosToken.PuntoYComa, "Se esperaba ';'.");
+
+            // Restaurar el ámbito anterior
+            if (_ambitoActual != null)
+            {
+                _ambitoActual = _ambitoActual.Padre;
+            }
         }
 
         // coleccion = "type", identificador, "is array", "(", longitud, ")", "of", tipo, ";", variables
         private void Coleccion()
         {
             Emparejar(CodigosToken.Type, "Se esperaba 'type'.");
-            Identificador();
+            string? nombre = Identificador();
+
+            string elTipo = "Integer";
+
             Emparejar(CodigosToken.Is, "Se esperaba 'is'.");
             Emparejar(CodigosToken.Array, "Se esperaba 'array'.");
             Emparejar(CodigosToken.ParentesisAbre, "Se esperaba '('.");
             Longitud();
             Emparejar(CodigosToken.ParentesisCierra, "Se esperaba ')'.");
             Emparejar(CodigosToken.Of, "Se esperaba 'of'.");
-            Tipo();
+            
+            // Capturar el nombre del tipo
+            Token typeTok = ObtenerTokenActual();
+            if (typeTok.Codigo == CodigosToken.Integer || typeTok.Codigo == CodigosToken.Float || typeTok.Codigo == CodigosToken.Boolean)
+            {
+                elTipo = typeTok.Lexema;
+                Tipo();
+            }
+
             Emparejar(CodigosToken.PuntoYComa, "Se esperaba ';'.");
+
+            if (nombre != null && _ambitoActual != null)
+            {
+                // Registrar el tipo de arreglo personalizado con su tipo de elemento
+                var simbType = new Simbolo(nombre, "ArrayType", false, ObtenerTokenActual().Linea);
+                simbType.TipoElemento = elTipo;
+                _ambitoActual.Insertar(simbType);
+            }
+
             Variables();
         }
 
-        // variables = var, {var} (opcional en la práctica)
+        // variables = var, {var}
         private void Variables()
         {
             while (ObtenerTokenActual().Codigo == CodigosToken.Identificador)
@@ -334,10 +526,42 @@ namespace AdaCompilador
         // var = identificador, ":", tipoVar, ";"
         private void Var()
         {
-            Identificador();
+            int linea = ObtenerTokenActual().Linea;
+            string? nombre = Identificador();
             if (!Emparejar(CodigosToken.DosPuntos, "Se esperaba ':'. ")) { SincronizarVar(); return; }
-            TipoVar();
+
+            bool esConstante;
+            NodoExp? initExpr;
+            string tipo = TipoVar(out esConstante, out initExpr) ?? "Unknown";
+
             if (!Emparejar(CodigosToken.PuntoYComa, "Se esperaba ';'. ")) { SincronizarVar(); return; }
+
+            if (nombre != null && _ambitoActual != null)
+            {
+                Simbolo simb = new Simbolo(nombre, tipo, esConstante, linea);
+                if (!_ambitoActual.Insertar(simb))
+                {
+                    RegistrarErrorSemantico(linea, $"Error Semántico: El identificador '{nombre}' ya ha sido declarado en este ámbito.");
+                }
+
+                // Comprobar compatibilidad de tipos del inicializador
+                if (initExpr != null)
+                {
+                    string tipoInit = ObtenerTipoExp(initExpr);
+                    if (tipoInit != "Unknown" && tipo != "Unknown" && tipo != tipoInit)
+                    {
+                        RegistrarErrorSemantico(linea, "Error Semántico: Incompatibilidad de tipos en asignación.");
+                    }
+
+                    // Emitir cuarteto de inicialización
+                    string? resTemp = GenerarCuartetosExpre(initExpr);
+                    _generadorCodigoIntermedio.Emitir(":=", nombre, resTemp, null);
+                }
+                else if (esConstante)
+                {
+                    RegistrarErrorSemantico(linea, $"Error Semántico: La constante '{nombre}' debe ser inicializada.");
+                }
+            }
         }
 
         private void SincronizarVar()
@@ -362,33 +586,44 @@ namespace AdaCompilador
         }
 
         // tipoVar = identificador | palConst, tipo, valorIni | cadenaVar
-        private void TipoVar()
+        private string? TipoVar(out bool esConstante, out NodoExp? initExpr)
         {
+            esConstante = false;
+            initExpr = null;
             int codigo = ObtenerTokenActual().Codigo;
+
             if (codigo == CodigosToken.String || codigo == CodigosToken.Natural)
             {
+                string t = ObtenerTokenActual().Lexema;
                 CadenaVar();
+                return t;
             }
             else if (codigo == CodigosToken.Constant)
             {
-                PalConst();
+                esConstante = true;
+                PalConst(); // Consumir "constant"
+                string t = ObtenerTokenActual().Lexema;
                 Tipo();
-                ValorIni();
+                initExpr = ValorIni();
+                return t;
             }
             else if (codigo == CodigosToken.Integer || codigo == CodigosToken.Float || codigo == CodigosToken.Boolean)
             {
-                PalConst();
+                string t = ObtenerTokenActual().Lexema;
                 Tipo();
-                ValorIni();
+                initExpr = ValorIni();
+                return t;
             }
             else if (codigo == CodigosToken.Identificador)
             {
-                Identificador();
+                string? t = Identificador();
+                return t;
             }
             else
             {
                 RegistrarError(ObtenerTokenActual().Linea, $"Tipo de variable inválido: '{ObtenerTokenActual().Lexema}'.");
                 Avanzar();
+                return "Unknown";
             }
         }
 
@@ -402,20 +637,25 @@ namespace AdaCompilador
         }
 
         // tipoSal = tipo | cadenaVar
-        private void TipoSal()
+        private string TipoSal()
         {
             int codigo = ObtenerTokenActual().Codigo;
             if (codigo == CodigosToken.Integer || codigo == CodigosToken.Float || codigo == CodigosToken.Boolean)
             {
+                string t = ObtenerTokenActual().Lexema;
                 Tipo();
+                return t;
             }
             else if (codigo == CodigosToken.String || codigo == CodigosToken.Natural)
             {
+                string t = ObtenerTokenActual().Lexema;
                 CadenaVar();
+                return t;
             }
             else
             {
                 RegistrarError(ObtenerTokenActual().Linea, $"Se esperaba un tipo de retorno válido, se encontró '{ObtenerTokenActual().Lexema}'.");
+                return "Unknown";
             }
         }
 
@@ -443,33 +683,51 @@ namespace AdaCompilador
             }
         }
 
-        // valorIni = [":=", expre]  (Nota: en EBNF dice [expre], pero requiere el operador de asignación)
-        private void ValorIni()
+        // valorIni = [":=", expre]
+        private NodoExp? ValorIni()
         {
             if (ObtenerTokenActual().Codigo == CodigosToken.Asignacion)
             {
                 Avanzar();
-                Expre();
+                return Expre();
             }
+            return null;
         }
 
         // funcion = "function", identificador, "(", varEntradas, ")", "return", tipoSal, "is", variables, cuerpo, ";"
         private void Funcion()
         {
             Emparejar(CodigosToken.Function, "Se esperaba 'function'.");
-            Identificador();
+            string? funcNombre = Identificador();
+
+            // Crear ámbito para los parámetros y el cuerpo
+            var funcScope = new TablaSimbolos(_ambitoActual);
+            var parentScope = _ambitoActual;
+            _ambitoActual = funcScope;
+
             Emparejar(CodigosToken.ParentesisAbre, "Se esperaba '('.");
             VarEntradas();
             Emparejar(CodigosToken.ParentesisCierra, "Se esperaba ')'.");
             Emparejar(CodigosToken.Return, "Se esperaba 'return'.");
-            TipoSal();
+            
+            string retTipo = TipoSal();
+
+            // Registrar la función en el ámbito del padre con su tipo de retorno
+            if (parentScope != null && funcNombre != null)
+            {
+                parentScope.Insertar(new Simbolo(funcNombre, retTipo, false, ObtenerTokenActual().Linea));
+            }
+
             Emparejar(CodigosToken.Is, "Se esperaba 'is'.");
             Variables();
             Cuerpo();
             Emparejar(CodigosToken.PuntoYComa, "Se esperaba ';'.");
+
+            // Restaurar ámbito
+            _ambitoActual = parentScope;
         }
 
-        // varEntradas = varEnt, ";", {varEnt, ";"}  (Nota: flexibilizado para soportar sin ';' al final)
+        // varEntradas = varEnt, ";", {varEnt, ";"}
         private void VarEntradas()
         {
             VarEnt();
@@ -494,10 +752,23 @@ namespace AdaCompilador
         // varEnt = identificador, ":", inAux, tipoVar
         private void VarEnt()
         {
-            Identificador();
+            int linea = ObtenerTokenActual().Linea;
+            string? nombre = Identificador();
             Emparejar(CodigosToken.DosPuntos, "Se esperaba ':'.");
             InAux();
-            TipoVar();
+            
+            bool esConst;
+            NodoExp? initExpr;
+            string tipo = TipoVar(out esConst, out initExpr) ?? "Unknown";
+
+            if (nombre != null && _ambitoActual != null)
+            {
+                Simbolo simb = new Simbolo(nombre, tipo, esConst, linea);
+                if (!_ambitoActual.Insertar(simb))
+                {
+                    RegistrarErrorSemantico(linea, $"Error Semántico: El identificador '{nombre}' ya ha sido declarado en este ámbito.");
+                }
+            }
         }
 
         // inAux = [("in" | "out" | "in out")]
@@ -563,7 +834,7 @@ namespace AdaCompilador
                     codigo == CodigosToken.When || 
                     codigo == CodigosToken.If || 
                     codigo == CodigosToken.For || 
-                    codigo == CodigosToken.WhileKw || 
+                    codigo == CodigosToken.WhileKw ||
                     codigo == CodigosToken.Loop || 
                     codigo == CodigosToken.Case ||
                     codigo == CodigosToken.Put ||
@@ -584,7 +855,12 @@ namespace AdaCompilador
             if (codigo == CodigosToken.Return)
             {
                 Avanzar();
-                Expre();
+                NodoExp? expTree = Expre();
+                if (expTree != null)
+                {
+                    string? resTemp = GenerarCuartetosExpre(expTree);
+                    _generadorCodigoIntermedio.Emitir("return", resTemp, null, null);
+                }
             }
             else if (codigo == CodigosToken.Put_Line)
             {
@@ -592,6 +868,7 @@ namespace AdaCompilador
                 Emparejar(CodigosToken.ParentesisAbre, "Se esperaba '('.");
                 DatoPut();
                 Emparejar(CodigosToken.ParentesisCierra, "Se esperaba ')'.");
+                _generadorCodigoIntermedio.Emitir("Put_Line", null, null, null);
             }
             else if (codigo == CodigosToken.Put)
             {
@@ -599,10 +876,12 @@ namespace AdaCompilador
                 Emparejar(CodigosToken.ParentesisAbre, "Se esperaba '('.");
                 DatoPut();
                 Emparejar(CodigosToken.ParentesisCierra, "Se esperaba ')'.");
+                _generadorCodigoIntermedio.Emitir("Put", null, null, null);
             }
             else if (codigo == CodigosToken.New_Line)
             {
                 Avanzar();
+                _generadorCodigoIntermedio.Emitir("New_Line", null, null, null);
             }
             else if (codigo == CodigosToken.Get_Line)
             {
@@ -610,6 +889,7 @@ namespace AdaCompilador
                 Emparejar(CodigosToken.ParentesisAbre, "Se esperaba '('.");
                 ListaVar();
                 Emparejar(CodigosToken.ParentesisCierra, "Se esperaba ')'.");
+                _generadorCodigoIntermedio.Emitir("Get_Line", null, null, null);
             }
             else if (codigo == CodigosToken.Get)
             {
@@ -617,12 +897,15 @@ namespace AdaCompilador
                 Emparejar(CodigosToken.ParentesisAbre, "Se esperaba '('.");
                 VarUso();
                 Emparejar(CodigosToken.ParentesisCierra, "Se esperaba ')'.");
+                _generadorCodigoIntermedio.Emitir("Get", null, null, null);
             }
             else if (codigo == CodigosToken.Exit)
             {
                 Avanzar();
                 Emparejar(CodigosToken.When, "Se esperaba 'when'.");
-                Condicion();
+                NodoExp? condTree = Condicion();
+                string? condTemp = GenerarCuartetosExpre(condTree);
+                _generadorCodigoIntermedio.Emitir("exit_when", condTemp, null, null);
             }
             else if (codigo == CodigosToken.For)
             {
@@ -646,12 +929,39 @@ namespace AdaCompilador
             }
             else if (codigo == CodigosToken.Identificador)
             {
-                // asignacion = var_uso, ":=", expre  |  var_uso (llamada de procedimiento)
-                VarUso();
+                Token varTok = ObtenerTokenActual();
+                string? nombre = VarUso();
                 if (ObtenerTokenActual().Codigo == CodigosToken.Asignacion)
                 {
                     Avanzar();
-                    Expre();
+                    NodoExp? expTree = Expre();
+                    
+                    if (nombre != null && _ambitoActual != null)
+                    {
+                        Simbolo? simb = _ambitoActual.Buscar(nombre);
+                        if (simb != null)
+                        {
+                            if (simb.EsConstante)
+                            {
+                                RegistrarErrorSemantico(varTok.Linea, $"Error Semántico: No se puede asignar un valor a la constante '{nombre}'.");
+                            }
+                            if (expTree != null)
+                            {
+                                string tipoExpr = ObtenerTipoExp(expTree);
+                                if (tipoExpr != "Unknown" && simb.Tipo != "Unknown" && simb.Tipo != tipoExpr)
+                                {
+                                    RegistrarErrorSemantico(varTok.Linea, "Error Semántico: Incompatibilidad de tipos en asignación.");
+                                }
+                            }
+                        }
+
+                        // Emitir cuarteto de asignación
+                        if (expTree != null)
+                        {
+                            string? resTemp = GenerarCuartetosExpre(expTree);
+                            _generadorCodigoIntermedio.Emitir(":=", nombre, resTemp, null);
+                        }
+                    }
                 }
             }
             else
@@ -662,28 +972,62 @@ namespace AdaCompilador
         }
 
         // identificador = letra, resto_id
-        private void Identificador()
+        private string? Identificador()
         {
-            if (ObtenerTokenActual().Codigo == CodigosToken.Identificador)
+            Token tok = ObtenerTokenActual();
+            if (tok.Codigo == CodigosToken.Identificador)
             {
                 Avanzar();
+                return tok.Lexema;
             }
             else
             {
-                RegistrarError(ObtenerTokenActual().Linea, $"Se esperaba un identificador, se encontró '{ObtenerTokenActual().Lexema}'.");
+                RegistrarError(tok.Linea, $"Se esperaba un identificador, se encontró '{tok.Lexema}'.");
+                return null;
             }
         }
 
         // var_uso = identificador, ["(", lista_var, ")"]
-        private void VarUso()
+        private string? VarUso()
         {
-            Identificador();
+            var prevTokensExp = _tokensExpActual;
+            _tokensExpActual = null; // Deshabilitar la grabación automática para fusionar los tokens de VarUso
+            
+            int startPos = _posicionActual;
+            Token tok = ObtenerTokenActual();
+            string? nombre = Identificador();
+
+            if (nombre != null && _ambitoActual != null)
+            {
+                Simbolo? simb = _ambitoActual.Buscar(nombre);
+                if (simb == null)
+                {
+                    RegistrarErrorSemantico(tok.Linea, $"Error Semántico: La variable '{nombre}' no existe en el ámbito actual.");
+                }
+            }
+
             if (ObtenerTokenActual().Codigo == CodigosToken.ParentesisAbre)
             {
                 Avanzar();
                 ListaVar();
                 Emparejar(CodigosToken.ParentesisCierra, "Se esperaba ')'.");
             }
+            int endPos = _posicionActual;
+
+            // Combinar tokens consumidos dentro de VarUso en un único operando de cadena
+            string lexeme = "";
+            for (int k = startPos; k < endPos; k++)
+            {
+                lexeme += _listaTokens[k].Lexema;
+            }
+
+            _tokensExpActual = prevTokensExp;
+            if (_tokensExpActual != null && !string.IsNullOrEmpty(lexeme))
+            {
+                _tokensExpActual.Add(new Token(CodigosToken.Identificador, lexeme, tok.Linea));
+            }
+
+            return nombre;
         }
 
         // lista_var = expre {",", expre}
@@ -698,8 +1042,14 @@ namespace AdaCompilador
         }
 
         // expre = (termino | var_uso), [op, expre] | datoBool
-        private void Expre()
+        private NodoExp? Expre()
         {
+            bool esTopLevel = (_tokensExpActual == null);
+            if (esTopLevel)
+            {
+                _tokensExpActual = new List<Token>();
+            }
+
             int codigo = ObtenerTokenActual().Codigo;
             if (codigo == CodigosToken.True || codigo == CodigosToken.False)
             {
@@ -707,8 +1057,6 @@ namespace AdaCompilador
             }
             else
             {
-                // termino = palnum | tipo, "(", palnum, ")" | "(", expre, ")"
-                // var_uso = identificador, ["(", lista_var, ")"]
                 if (codigo == CodigosToken.ParentesisAbre)
                 {
                     Avanzar();
@@ -724,7 +1072,7 @@ namespace AdaCompilador
                 }
                 else if (codigo == CodigosToken.EnteroLiteral || codigo == CodigosToken.DecimalLiteral)
                 {
-                    Avanzar(); // palnum -> numero
+                    Avanzar();
                 }
                 else if (codigo == CodigosToken.Identificador)
                 {
@@ -732,7 +1080,7 @@ namespace AdaCompilador
                 }
                 else if (codigo == CodigosToken.CadenaLiteral)
                 {
-                    Avanzar(); // Permitir constantes string en expresiones
+                    Avanzar();
                 }
                 else
                 {
@@ -750,6 +1098,35 @@ namespace AdaCompilador
                     Expre();
                 }
             }
+
+            if (esTopLevel)
+            {
+                var tokens = _tokensExpActual;
+                _tokensExpActual = null;
+
+                if (tokens != null)
+                {
+                    NodoExp? tree = ExpressionParser.Parse(tokens);
+                    if (tree != null)
+                    {
+                        StringBuilder infixSb = new StringBuilder();
+                        foreach (var t in tokens)
+                        {
+                            infixSb.Append(t.Lexema).Append(" ");
+                        }
+                        string infix = infixSb.ToString().Trim();
+                        int line = tokens.Count > 0 ? tokens[0].Linea : ObtenerTokenActual().Linea;
+
+                        string prefijo = tree.ToPrefijo();
+                        string posfijo = tree.ToPosfijo();
+
+                        _generadorCodigoIntermedio.RegistrarExpresion(line, infix, prefijo, posfijo);
+                    }
+                    return tree;
+                }
+            }
+
+            return null;
         }
 
         // palnum = identificador | numero
@@ -885,11 +1262,66 @@ namespace AdaCompilador
         private void CicloPara()
         {
             Emparejar(CodigosToken.For, "Se esperaba 'for'.");
-            Identificador();
+
+            // Crear un ámbito temporal para la variable de control del ciclo
+            _ambitoActual = new TablaSimbolos(_ambitoActual);
+
+            string? varName = Identificador();
+            if (varName != null)
+            {
+                _ambitoActual.Insertar(new Simbolo(varName, "Integer", true, ObtenerTokenActual().Linea));
+            }
+
             Emparejar(CodigosToken.In, "Se esperaba 'in'.");
+            bool reverse = (ObtenerTokenActual().Codigo == CodigosToken.Reverse);
             Reverso();
-            Longitud();
+
+            // Longitud
+            Token lowTok = ObtenerTokenActual();
+            Palnum();
+            Emparejar(CodigosToken.Rango, "Se esperaba '..'.");
+            Token highTok = ObtenerTokenActual();
+            Palnum();
+
+            string low = lowTok.Lexema;
+            string high = highTok.Lexema;
+
+            string labelStart = _generadorCodigoIntermedio.NuevaEtiqueta();
+            string labelExit = _generadorCodigoIntermedio.NuevaEtiqueta();
+
+            string startVal = reverse ? high : low;
+            _generadorCodigoIntermedio.Emitir(":=", varName, startVal, null);
+
+            _generadorCodigoIntermedio.Emitir("LABEL", labelStart, null, null);
+
+            string condTemp = _generadorCodigoIntermedio.NuevaVariableTemporal();
+            if (reverse)
+            {
+                _generadorCodigoIntermedio.Emitir(">=", varName, low, condTemp);
+            }
+            else
+            {
+                _generadorCodigoIntermedio.Emitir("<=", varName, high, condTemp);
+            }
+
+            _generadorCodigoIntermedio.Emitir("JUMP_FALSE", condTemp, labelExit, null);
+
+            // Cuerpo del ciclo
             CicloLoop();
+
+            string nextTemp = _generadorCodigoIntermedio.NuevaVariableTemporal();
+            string stepOp = reverse ? "-" : "+";
+            _generadorCodigoIntermedio.Emitir(stepOp, varName, "1", nextTemp);
+            _generadorCodigoIntermedio.Emitir(":=", varName, nextTemp, null);
+
+            _generadorCodigoIntermedio.Emitir("JUMP", labelStart, null, null);
+            _generadorCodigoIntermedio.Emitir("LABEL", labelExit, null, null);
+
+            // Salir del ámbito del ciclo
+            if (_ambitoActual != null)
+            {
+                _ambitoActual = _ambitoActual.Padre;
+            }
         }
 
         // reverso = ["reverse"]
@@ -913,23 +1345,53 @@ namespace AdaCompilador
         private void CicloSi()
         {
             Emparejar(CodigosToken.If, "Se esperaba 'if'.");
-            Condicion();
+            NodoExp? condTree = Condicion();
+
+            string? condTemp = GenerarCuartetosExpre(condTree);
+            string labelFalse = _generadorCodigoIntermedio.NuevaEtiqueta();
+            string labelExit = _generadorCodigoIntermedio.NuevaEtiqueta();
+
+            _generadorCodigoIntermedio.Emitir("JUMP_FALSE", condTemp, labelFalse, null);
+
             Emparejar(CodigosToken.Then, "Se esperaba 'then'.");
             Acciones();
-            EntoncesSi();
+
+            bool hasElseOrElsif = (ObtenerTokenActual().Codigo == CodigosToken.Elsif || ObtenerTokenActual().Codigo == CodigosToken.Else);
+            if (hasElseOrElsif)
+            {
+                _generadorCodigoIntermedio.Emitir("JUMP", labelExit, null, null);
+            }
+
+            _generadorCodigoIntermedio.Emitir("LABEL", labelFalse, null, null);
+
+            EntoncesSi(labelExit);
+
+            if (hasElseOrElsif)
+            {
+                _generadorCodigoIntermedio.Emitir("LABEL", labelExit, null, null);
+            }
+
             Emparejar(CodigosToken.End, "Se esperaba 'end'.");
             Emparejar(CodigosToken.If, "Se esperaba 'if'.");
         }
 
         // entoncesSi = {"elsif", condicion, "then", acciones}, ["else", acciones]
-        private void EntoncesSi()
+        private void EntoncesSi(string labelExit)
         {
             while (ObtenerTokenActual().Codigo == CodigosToken.Elsif)
             {
                 Avanzar();
-                Condicion();
+                NodoExp? condTree = Condicion();
+                string? condTemp = GenerarCuartetosExpre(condTree);
+                string labelNextBranch = _generadorCodigoIntermedio.NuevaEtiqueta();
+
+                _generadorCodigoIntermedio.Emitir("JUMP_FALSE", condTemp, labelNextBranch, null);
+
                 Emparejar(CodigosToken.Then, "Se esperaba 'then'.");
                 Acciones();
+
+                _generadorCodigoIntermedio.Emitir("JUMP", labelExit, null, null);
+                _generadorCodigoIntermedio.Emitir("LABEL", labelNextBranch, null, null);
             }
             if (ObtenerTokenActual().Codigo == CodigosToken.Else)
             {
@@ -941,14 +1403,32 @@ namespace AdaCompilador
         // cicloMientras = "while", condicion, cicloLoop
         private void CicloMientras()
         {
+            string labelStart = _generadorCodigoIntermedio.NuevaEtiqueta();
+            string labelExit = _generadorCodigoIntermedio.NuevaEtiqueta();
+
+            _generadorCodigoIntermedio.Emitir("LABEL", labelStart, null, null);
+
             Emparejar(CodigosToken.WhileKw, "Se esperaba 'while'.");
-            Condicion();
+            NodoExp? condTree = Condicion();
+            string? condTemp = GenerarCuartetosExpre(condTree);
+
+            _generadorCodigoIntermedio.Emitir("JUMP_FALSE", condTemp, labelExit, null);
+
             CicloLoop();
+
+            _generadorCodigoIntermedio.Emitir("JUMP", labelStart, null, null);
+            _generadorCodigoIntermedio.Emitir("LABEL", labelExit, null, null);
         }
 
         // condicion ::= {not, casoComp, [opLogico]}
-        private void Condicion()
+        private NodoExp? Condicion()
         {
+            bool esTopLevel = (_tokensExpActual == null);
+            if (esTopLevel)
+            {
+                _tokensExpActual = new List<Token>();
+            }
+
             while (ObtenerTokenActual().Codigo == CodigosToken.Not ||
                    ObtenerTokenActual().Codigo == CodigosToken.True ||
                    ObtenerTokenActual().Codigo == CodigosToken.False ||
@@ -972,6 +1452,35 @@ namespace AdaCompilador
                     break;
                 }
             }
+
+            if (esTopLevel)
+            {
+                var tokens = _tokensExpActual;
+                _tokensExpActual = null;
+
+                if (tokens != null)
+                {
+                    NodoExp? tree = ExpressionParser.Parse(tokens);
+                    if (tree != null)
+                    {
+                        StringBuilder infixSb = new StringBuilder();
+                        foreach (var t in tokens)
+                        {
+                            infixSb.Append(t.Lexema).Append(" ");
+                        }
+                        string infix = infixSb.ToString().Trim();
+                        int line = tokens.Count > 0 ? tokens[0].Linea : ObtenerTokenActual().Linea;
+
+                        string prefijo = tree.ToPrefijo();
+                        string posfijo = tree.ToPosfijo();
+
+                        _generadorCodigoIntermedio.RegistrarExpresion(line, infix, prefijo, posfijo);
+                    }
+                    return tree;
+                }
+            }
+
+            return null;
         }
 
         private bool EsOpLogico(out bool esCompuesto)
@@ -1001,10 +1510,28 @@ namespace AdaCompilador
 
         private void AvanzarOpLogico(bool esCompuesto)
         {
-            Avanzar(); // and / or / xor
             if (esCompuesto)
             {
-                Avanzar(); // then / else
+                Token t1 = ObtenerTokenActual();
+                int linea = t1.Linea;
+                int codigo = t1.Codigo; // CodigosToken.And o CodigosToken.Or
+                string lex = (codigo == CodigosToken.And) ? "and then" : "or else";
+
+                var prevTokens = _tokensExpActual;
+                _tokensExpActual = null; // Desactivar la grabación temporalmente
+                
+                Avanzar(); // consume t1 (and / or)
+                Avanzar(); // consume t2 (then / else)
+                
+                _tokensExpActual = prevTokens;
+                if (_tokensExpActual != null)
+                {
+                    _tokensExpActual.Add(new Token(codigo, lex, linea));
+                }
+            }
+            else
+            {
+                Avanzar();
             }
         }
 
