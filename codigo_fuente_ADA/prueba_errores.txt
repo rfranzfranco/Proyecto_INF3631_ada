@@ -1,16 +1,39 @@
 with Ada.Text_IO;
+with Ada.Integer_Text_IO;
+with Ada.Float_Text_IO;
 use Ada.Text_IO;
+use Ada.Integer_Text_IO;
+use Ada.Float_Text_IO;
 
 procedure Prueba_Errores is
+   -- Variables bien declaradas
    Valor : Integer := 100;
    Factor : Float := 2.5;
-   -- Errores léxicos intencionados a continuación:
-   SimboloExtraño : Character := '@';  -- @ es un carácter extraño
-   SimboloOtro : Character := '$';     -- $ es un carácter extraño
-   DecimalMal1 : Float := 12.a;        // 12.a es un decimal mal formado
-   DecimalMal2 : Float := 15. ;        // 15. es un decimal mal formado (falta decimales)
-   CadenaAbierta : String := "Hola;    -- Cadena sin cerrar
+   Activo : Boolean := True;
+   
+   -- ERROR SEMANTICO 1: Variable duplicada en el mismo ambito
+   Valor : Float := 5.5;
+   
+   -- ERROR LEXICO: Caracter no permitido '@' y decimal mal formado
+   Extraño : Character := '@';
+   DecimalMal : Float := 10.a;
+   
+   -- ERROR SEMANTICO 2: La constante no esta inicializada
+   Limite : constant Integer;
+
 begin
-   Put_Line("Iniciando prueba con errores...");
-   Valor := Valor + 50;
+   Put_Line ("Iniciando prueba con errores...");
+   
+   -- ERROR SEMANTICO 3: Incompatibilidad de tipos en asignacion (Integer := Float)
+   Valor := Factor;
+   
+   -- ERROR SEMANTICO 4: Asignacion a una constante
+   Limite := 50;
+
+   -- ERROR SINTACTICO: Falta punto y coma
+   Valor := Valor + 5
+
+   -- ERROR SEMANTICO 5: Variable no declarada (no existe)
+   NoExiste := 42;
+
 end Prueba_Errores;

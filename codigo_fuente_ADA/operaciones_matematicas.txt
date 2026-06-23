@@ -1,0 +1,92 @@
+with Ada.Text_IO;
+with Ada.Integer_Text_IO;
+with Ada.Float_Text_IO;
+use Ada.Text_IO;
+use Ada.Integer_Text_IO;
+use Ada.Float_Text_IO;
+
+procedure Operaciones_Matematicas is
+   -- Variables flotantes
+   A : Float := 2.0;
+   B : Float := 8.0;
+   C : Float := 3.0;
+   Discriminante : Float := 0.0;
+   
+   Base : Float := 10.5;
+   Altura : Float := 4.2;
+   Area : Float := 0.0;
+   
+   GradosC : Float := 36.5;
+   GradosF : Float := 0.0;
+   
+   Radio : Float := 5.0;
+   PI : constant Float := 3.14159;
+   Circunferencia : Float := 0.0;
+
+   -- Variables enteras
+   Num1 : Integer := 17;
+   Num2 : Integer := 5;
+   ResSuma : Integer := 0;
+   ResResta : Integer := 0;
+   ResMult : Integer := 0;
+   ResDiv : Integer := 0;
+   ResMod : Integer := 0;
+
+   -- Variables booleanas
+   EsDiscriminantePositivo : Boolean := False;
+   EsAreaGrande : Boolean := False;
+   CondicionCompuesta : Boolean := False;
+
+begin
+   Put_Line ("=== ANALISIS DE OPERACIONES MATEMATICAS ===");
+
+   -- 1. Ecuacion cuadratica parcial (calculo de discriminante)
+   -- Formula: b^2 - 4*a*c
+   Discriminante := (B * B) - (4.0 * A * C);
+
+   -- 2. Area de un triangulo
+   -- Formula: (base * altura) / 2
+   Area := (Base * Altura) / 2.0;
+
+   -- 3. Conversion de Celsius a Fahrenheit
+   -- Formula: (Celsius * 1.8) + 32
+   GradosF := (GradosC * 1.8) + 32.0;
+
+   -- 4. Circunferencia de un circulo
+   -- Formula: 2 * PI * Radio
+   Circunferencia := 2.0 * PI * Radio;
+
+   -- 5. Operaciones aritmeticas enteras basicas
+   ResSuma := Num1 + Num2;
+   ResResta := Num1 - Num2;
+   ResMult := Num1 * Num2;
+   ResDiv := Num1 / Num2;
+   ResMod := Num1 mod Num2;
+
+   -- 6. Evaluacion y asignacion de banderas booleanas con estructuras de control
+   if Discriminante >= 0.0 then
+      EsDiscriminantePositivo := True;
+   else
+      EsDiscriminantePositivo := False;
+   end if;
+
+   if Area > 20.0 then
+      EsAreaGrande := True;
+   else
+      EsAreaGrande := False;
+   end if;
+   
+   -- Condicion compuesta con operadores de cortocircuito y logicos
+   if (EsDiscriminantePositivo and then EsAreaGrande) or else not (GradosF < 100.0) then
+      CondicionCompuesta := True;
+   else
+      CondicionCompuesta := False;
+   end if;
+
+   if CondicionCompuesta then
+      Put_Line ("Condicion compuesta evaluada como verdadera.");
+   else
+      Put_Line ("Condicion compuesta evaluada como falsa.");
+   end if;
+
+end Operaciones_Matematicas;
