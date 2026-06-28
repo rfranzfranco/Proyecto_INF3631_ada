@@ -8,7 +8,7 @@ namespace AdaCompilador
     {
         static void Main(string[] args)
         {
-            string rutaDefecto = @"D:\SEM 1-2026\INF 3631A - Diseno de compiladores\proyecto_SW\Proyecto_INF3631_ada\codigo_fuente_ADA\operaciones_matematicas.txt";            
+            string rutaDefecto = @"D:\SEM 1-2026\INF 3631A - Diseno de compiladores\proyecto_INF3631A\Proyecto_INF3631_ada\codigo_fuente_ADA\prueba_errores.txt";            
             string rutaArchivo = args.Length > 0 ? args[0] : rutaDefecto;
             Console.WriteLine("=======================================================================");
             Console.WriteLine("                ANALIZADOR LÉXICO - COMPILADOR ADA");
